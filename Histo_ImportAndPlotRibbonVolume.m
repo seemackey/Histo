@@ -108,6 +108,8 @@ end
 % data are now grouped. you are a hero. 
 
 %% analyze the grouped data
+
+
 groups = {M_long, F_long, M_short, control};
 
 % Initialize a struct to store mean volumes
@@ -117,8 +119,8 @@ meanVolumes = struct();
 for k = 1:length(groupNames)
     group = groupNames{k};
     groupCases = groups{k}; % Get the case IDs for the current group
-    allFreqNames = {}; % To store all unique frequency names
-    freqData = struct(); % To store volume data by frequency
+    allFreqNames = {}; % To store all unique frequency names for this group
+    freqData = struct(); % To store volume data by frequency for this group
 
     % Collect data from each case in the group
     for caseID = groupCases
@@ -126,10 +128,8 @@ for k = 1:length(groupNames)
         
         % Check both L and R versions of the case
         for suffix = ["L", "R"]
-            caseName = ['x' num2str(caseID) suffix];
-            validCaseName = matlab.lang.makeValidName(caseName);
-            if isfield(data, validCaseName)
-                caseData = data.(validCaseName);
+            if isfield(groupedData.(group), caseIDStr) && isfield(groupedData.(group).(caseIDStr), suffix)
+                caseData = groupedData.(group).(caseIDStr).(suffix);
 
                 % Collect volume data for each frequency place
                 freqNames = fieldnames(caseData);
@@ -147,17 +147,26 @@ for k = 1:length(groupNames)
         end
     end
 
-    % Calculate mean volume for each frequency place
+    %  metrics for each frequency place
     allFreqNames = unique(allFreqNames); % Get unique frequency names
     meanVolumes.(group) = struct();
     for j = 1:length(allFreqNames)
         freq = allFreqNames{j};
+        tmpdata = freqData.(freq);
         meanVolumes.(group).(freq) = mean(freqData.(freq), 'omitnan');
+        VolumeIQR.(group).(freq) = iqr(tmpdata);
+        VolumeSkew.(group).(freq) = skewness(tmpdata);
+        VolumeRange.(group).(freq) = range(tmpdata);
+        VolumeTailVar.(group).(freq) = var(tmpdata(floor(0.9*length(tmpdata)):end));
+
+
     end
 end
 
+%% PLOTTING
 % Plot the mean volumes
 figure;
+subplot(1,4,1)
 hold on;
 colors = lines(length(groupNames));
 
@@ -176,8 +185,95 @@ for k = 1:length(groupNames)
     plot(freqs, volumes, '-o', 'Color', colors(k, :), 'DisplayName', group);
 end
 
+
 xlabel('Frequency (kHz)');
+set(gca, 'XScale', 'log'); 
+set(gca,'XLim',[0.1 50])
 ylabel('Mean Ribbon Volume');
 legend('Location', 'best');
 title('Mean Ribbon Volume as a Function of Frequency');
-hold off;
+
+
+subplot(1,4,2)
+hold on;
+colors = lines(length(groupNames));
+
+for k = 1:length(groupNames)
+    group = groupNames{k};
+    freqNames = fieldnames(VolumeIQR.(group));
+    
+    % Convert frequency names to numeric values
+    freqs = cellfun(@(x) str2double(strrep(x(2:end), '_', '.')), freqNames);
+    volumes = cellfun(@(x) VolumeIQR.(group).(x), freqNames);
+
+    % Sort by frequency
+    [freqs, sortIdx] = sort(freqs);
+    volumes = volumes(sortIdx);
+    
+    plot(freqs, volumes, '-o', 'Color', colors(k, :), 'DisplayName', group);
+end
+
+
+xlabel('Frequency (kHz)');
+set(gca, 'XScale', 'log'); 
+set(gca,'XLim',[0.1 50])
+ylabel('Rib Vol IQR');
+legend('Location', 'best');
+title('Interquartile range');
+
+
+
+subplot(1,4,3)
+hold on;
+colors = lines(length(groupNames));
+
+for k = 1:length(groupNames)
+    group = groupNames{k};
+    freqNames = fieldnames(VolumeSkew.(group));
+    
+    % Convert frequency names to numeric values
+    freqs = cellfun(@(x) str2double(strrep(x(2:end), '_', '.')), freqNames);
+    volumes = cellfun(@(x) VolumeSkew.(group).(x), freqNames);
+
+    % Sort by frequency
+    [freqs, sortIdx] = sort(freqs);
+    volumes = volumes(sortIdx);
+    
+    plot(freqs, volumes, '-o', 'Color', colors(k, :), 'DisplayName', group);
+end
+
+
+xlabel('Frequency (kHz)');
+set(gca, 'XScale', 'log'); 
+set(gca,'XLim',[0.1 50])
+ylabel('Skewness');
+legend('Location', 'best');
+title('Ribbon Vol. Skew');
+
+subplot(1,4,4)
+hold on;
+colors = lines(length(groupNames));
+
+for k = 1:length(groupNames)
+    group = groupNames{k};
+    freqNames = fieldnames(VolumeTailVar.(group));
+    
+    % Convert frequency names to numeric values
+    freqs = cellfun(@(x) str2double(strrep(x(2:end), '_', '.')), freqNames);
+    volumes = cellfun(@(x) VolumeTailVar.(group).(x), freqNames);
+
+    % Sort by frequency
+    [freqs, sortIdx] = sort(freqs);
+    volumes = volumes(sortIdx);
+    
+    plot(freqs, volumes, '-o', 'Color', colors(k, :), 'DisplayName', group);
+end
+
+
+xlabel('Frequency (kHz)');
+set(gca, 'XScale', 'log'); 
+set(gca,'XLim',[0.1 50])
+ylabel('Tail Var.');
+legend('Location', 'best');
+title('Tail Var');
+print('RibonVolSummary2', '-djpeg', '-r300'); % Save as JPEG with 300 dpi resolution

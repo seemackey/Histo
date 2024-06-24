@@ -76,10 +76,10 @@ end
 
 %% group the data
 %  according to this
-M_long = [109, 110, 114, 124, 125];
+M_long = [108,109, 110, 114, 124, 125];
 F_long = [119, 120, 122, 123];
-M_short = [117, 118, 121];
-control = [111, 112, 113];
+M_short = [26, 28,117, 118, 121];
+control = [103,104,111, 112, 113];
 
 groupNames = {'M_long', 'F_long', 'M_short', 'control'};
 groupedData = struct();
@@ -154,6 +154,7 @@ for k = 1:length(groupNames)
         freq = allFreqNames{j};
         tmpdata = freqData.(freq);
         meanVolumes.(group).(freq) = mean(freqData.(freq), 'omitnan');
+        VolumesSD.(group).(freq) = std(tmpdata);
         VolumeIQR.(group).(freq) = iqr(tmpdata);
         VolumeSkew.(group).(freq) = skewness(tmpdata);
         VolumeRange.(group).(freq) = range(tmpdata);
@@ -177,12 +178,14 @@ for k = 1:length(groupNames)
     % Convert frequency names to numeric values
     freqs = cellfun(@(x) str2double(strrep(x(2:end), '_', '.')), freqNames);
     volumes = cellfun(@(x) meanVolumes.(group).(x), freqNames);
-
+    sds = cellfun(@(x) VolumesSD.(group).(x), freqNames);
+    
     % Sort by frequency
     [freqs, sortIdx] = sort(freqs);
     volumes = volumes(sortIdx);
     
     plot(freqs, volumes, '-o', 'Color', colors(k, :), 'DisplayName', group);
+%   errorbar(freqs,volumes,sds)
 end
 
 
@@ -256,11 +259,11 @@ colors = lines(length(groupNames));
 
 for k = 1:length(groupNames)
     group = groupNames{k};
-    freqNames = fieldnames(VolumeTailVar.(group));
+    freqNames = fieldnames(VolumeRange.(group));
     
     % Convert frequency names to numeric values
     freqs = cellfun(@(x) str2double(strrep(x(2:end), '_', '.')), freqNames);
-    volumes = cellfun(@(x) VolumeTailVar.(group).(x), freqNames);
+    volumes = cellfun(@(x) VolumeRange.(group).(x), freqNames);
 
     % Sort by frequency
     [freqs, sortIdx] = sort(freqs);
@@ -273,7 +276,8 @@ end
 xlabel('Frequency (kHz)');
 set(gca, 'XScale', 'log'); 
 set(gca,'XLim',[0.1 50])
-ylabel('Tail Var.');
+ylabel('Range');
 legend('Location', 'best');
-title('Tail Var');
-print('RibonVolSummary2', '-djpeg', '-r300'); % Save as JPEG with 300 dpi resolution
+title('Range');
+%print('RibonVolSummary6', '-djpeg', '-r300'); % Save as JPEG with 300 dpi resolution
+%print('UbiqCSD', '-djpeg', '-r300');

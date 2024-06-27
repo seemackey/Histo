@@ -1,5 +1,6 @@
+
 %% import cochlear histology and make plots
-clear; clc;
+
 
 % Load the data from the Excel file
 filename = 'C:\Users\cmackey\Documents\CochlearHistology\Cochlea Histology Data plots + blobs .xlsx';
@@ -12,7 +13,7 @@ raw_data = readtable(filename, 'Sheet', 'Synapse & IHC Raw Data');
 M_data = raw_data(startsWith(raw_data.Case, 'M'), :);
 
 % Define the groups
-M_long = [109, 110, 114, 124, 125];
+M_long = [108,109, 110, 114, 124, 125];
 F_long = [119, 120, 122, 123];
 M_short = [117, 118, 121];
 control = [111, 112, 113];
@@ -136,7 +137,7 @@ if includeKiloCaptain == 1
     errorbar(kilocaptain.freqs, kilocaptain.syns, kilocaptain.sds, 'd-', 'DisplayName', 'K&C');
 end
 if includeOldCtrlGrp == 1
-    errorbar(YeOldCtrl.freqs, YeOldCtrl.syns, YeOldCtrl.sds, 'd-', 'DisplayName', 'OldCtrl');
+    errorbar(YeOldCtrl.freqs, YeOldCtrl.syns, YeOldCtrl.sds, 'k-', 'DisplayName', 'OldCtrl');
 end
 
 set(gca, 'XScale', 'log'); 
@@ -151,6 +152,7 @@ title('Synaptic Counts');
 xlabel('Frequency');
 ylabel('Syn per IHC (Mean ± SD)');
 legend;
+legend('Location', 'northeastoutside'); % Move the legend outside the plot
 grid on;
 
 % Plot percentage of maximum syn per IHC trends
@@ -169,9 +171,169 @@ title('Percentage of Maximum Synaptic Counts');
 xlabel('Frequency');
 ylabel('% of Max Syn per IHC');
 legend;
+legend('Location', 'northeastoutside'); % Move the legend outside the plot
 grid on;
-
+print('HistoSynCount', '-djpeg', '-r300'); % Save as JPEG with 300 dpi resolution
 hold off;
+
+
+%% normalized to 1 khz analysis
+
+% Define groups for plotting
+groups = {'Mlong', 'Flong', 'Mshort'};
+group_data = {M_long_data, F_long_data, M_short_data};
+group_names = {'M_long', 'F_long', 'M_short'};
+
+% Include KiloCaptain data in Mshort group
+kilocaptain.freqs = [0.125 0.25 0.5 1 1.4 2 2.8 4 5.6 8 16 32];
+kilocaptain.syns = [9.465851597 12.55760512 14.24984781 16.0746409 17.29985339 16.24096249 13.78925586 13.37893177 11.69815908 16.55906823 16.12911883 9.821505376];
+
+%% Plotting Normalized Control Data
+figure;
+subplot(2, 2, 1);
+hold on;
+errorbar(controlDataForNorm.Freqs, controlDataForNorm.Syns, controlDataForNorm.SDs, 'd-', 'DisplayName', 'Normalized Ctrl');
+
+set(gca, 'XScale', 'log'); 
+set(gca,'XLim',[0.1 50]);
+xticks_custom = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+set(gca, 'XTick', xticks_custom);
+set(gca, 'XTickLabel', arrayfun(@num2str, xticks_custom, 'UniformOutput', false));
+
+title('Normalized Control Data');
+xlabel('Frequency');
+ylabel('Syn per IHC (Mean ± SD)');
+legend;
+legend('Location', 'northeastoutside'); % Move the legend outside the plot
+grid on;
+hold off;
+
+% Plotting Individual Cases
+
+% Define groups for plotting
+groups = {'Mlong', 'Flong', 'Mshort'};
+group_data = {M_long_data, F_long_data, M_short_data};
+group_names = {'M_long', 'F_long', 'M_short'};
+
+% Create a figure for subplots
+%figure;
+
+for g = 1:length(groups)
+    subplot(2, 2, g+1);
+    hold on;
+
+    % Get group data
+    data = group_data{g};
+    group_name = group_names{g};
+    
+    % Get unique cases
+    cases = unique(data.Case);
+    
+    % Plot each ear's data
+    for c = 1:length(cases)
+        case_data = data(strcmp(data.Case, cases{c}), :);
+        freqs = case_data.Freq;
+        syn_per_ihc = nan(height(case_data), 1);
+
+        % Convert 'Freq' column to numeric if necessary
+        if iscell(freqs)
+            freqs = cellfun(@str2double, freqs);
+        end
+
+        % Convert 'UpdatedRibbonCount' column to numeric if necessary
+        if iscell(case_data.UpdatedRibbonCount)
+            case_data.UpdatedRibbonCount = cellfun(@str2double, case_data.UpdatedRibbonCount);
+        end
+
+        % Convert 'x_Ribbons' column to numeric if necessary
+        if iscell(case_data.x_Ribbons)
+            case_data.x_Ribbons = cellfun(@str2double, case_data.x_Ribbons);
+        end
+
+        % Convert 'x_IHCs' column to numeric if necessary
+        if iscell(case_data.x_IHCs)
+            case_data.x_IHCs = cellfun(@str2double, case_data.x_IHCs);
+        end
+
+        for j = 1:height(case_data)
+            if ~isnan(case_data.UpdatedRibbonCount(j)) && isnumeric(case_data.UpdatedRibbonCount(j))
+                syn_per_ihc(j) = case_data.UpdatedRibbonCount(j) / case_data.x_IHCs(j);
+            else
+                syn_per_ihc(j) = case_data.x_Ribbons(j) / case_data.x_IHCs(j);
+            end
+        end
+        
+        % Average syn_per_ihc values for each frequency
+        [unique_freqs, ~, idx_unique] = unique(freqs);
+        avg_syn_per_ihc = arrayfun(@(x) mean(syn_per_ihc(idx_unique == x)), 1:length(unique_freqs));
+        
+        % Find the index for 1 kHz and normalize
+        idx_1khz = find(unique_freqs == 1);
+        if ~isempty(idx_1khz) && ~isnan(mean(avg_syn_per_ihc(idx_1khz)))
+            norm_factor = mean(avg_syn_per_ihc(idx_1khz));
+            avg_syn_per_ihc = avg_syn_per_ihc / norm_factor;
+        end
+        
+        plot(unique_freqs, avg_syn_per_ihc, 'DisplayName', cases{c});
+        hold on
+    end
+    
+    % Include KiloCaptain data in Mshort group
+    kcfreqs = [0.125
+                0.25
+                0.5
+                1
+                1.4
+                2
+                2.8
+                4
+                5.6
+                8
+                16
+                32
+                ];
+            kcfreqs2 = [0.125
+            0.25
+            0.5
+            1
+            
+            2
+            2.8
+            4
+            5.6
+            8
+            16
+            32
+            ];
+    if strcmp(group_name, 'M_short') && includeKiloCaptain == 1
+        norm_factor_kc = kiloL(kcfreqs == 1);
+        plot(kcfreqs, kiloL / norm_factor_kc, 'k-', 'DisplayName', 'M26L');
+        hold on
+        norm_factor_kc = kiloR(kcfreqs == 1);
+        plot(kcfreqs2, kiloR / norm_factor_kc, 'k-', 'DisplayName', 'M26R');
+        hold on
+        norm_factor_kc = CapL(kcfreqs == 1);
+        plot(kcfreqs, CapL / norm_factor_kc, 'k-', 'DisplayName', 'M28L');
+        hold on
+        norm_factor_kc = CapR(kcfreqs == 1);
+        plot(kcfreqs, CapR / norm_factor_kc, 'k-', 'DisplayName', 'M28R');
+        hold on
+    end
+    
+    set(gca, 'XScale', 'log'); 
+    set(gca, 'XLim', [0.1 50]);
+    set(gca, 'YLim', [0.2 1.4]);
+    xticks_custom = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+    set(gca, 'XTick', xticks_custom);
+    set(gca, 'XTickLabel', arrayfun(@num2str, xticks_custom, 'UniformOutput', false));
+    
+    title(group_name);
+    xlabel('Frequency');
+    ylabel('Syn per IHC');
+    legend('Location', 'northeastoutside'); % Move the legend outside the plot
+    grid on;
+    hold off;
+end
 
 
 %% FUNCTIONS 
@@ -197,7 +359,7 @@ function [freqs, means, sds] = calculate_mean_sd(group_data)
         group_data.Freq = cellfun(@str2double, group_data.Freq);
     end
     
-    % Convert 'Freq' column to numeric if necessary
+    % Convert to numeric if necessary
     if iscell(group_data.x_Ribbons)
         group_data.x_Ribbons = cellfun(@str2double, group_data.x_Ribbons);
     end
@@ -252,12 +414,12 @@ end
 function [freqs, perc_means, perc_sds] = calculate_percentage_max(group_data,group_name)
     
     
-    % Convert 'Freq' column to numeric if necessary
+    % Convert to numeric if necessary
     if iscell(group_data.Freq)
         group_data.Freq = cellfun(@str2double, group_data.Freq);
     end
     
-    % Convert 'Freq' column to numeric if necessary
+    % Convert to numeric if necessary
     if iscell(group_data.x_Ribbons)
         group_data.x_Ribbons = cellfun(@str2double, group_data.x_Ribbons);
     end
@@ -350,3 +512,55 @@ function [freqs, perc_means, perc_sds] = calculate_percentage_max(group_data,gro
     saveas(gcf, [filename_base, '.fig']);  % Save as .fig
     print('-djpeg', '-r300', [filename_base, '.jpg']);  % Save as high-resolution .jpg
 end
+
+% Function to group control data into a struct
+function control_struct = group_control_data(group_data)
+    % Convert necessary columns to numeric if they are cell arrays
+    if iscell(group_data.Freq)
+        group_data.Freq = cellfun(@str2double, group_data.Freq);
+    end
+    if iscell(group_data.x_Ribbons)
+        group_data.x_Ribbons = cellfun(@str2double, group_data.x_Ribbons);
+    end
+    if iscell(group_data.x_IHCs)
+        group_data.x_IHCs = cellfun(@str2double, group_data.x_IHCs);
+    end
+    if iscell(group_data.UpdatedRibbonCount)
+        group_data.UpdatedRibbonCount = cellfun(@str2double, group_data.UpdatedRibbonCount);
+    end
+
+    % Ensure no NaN values in 'Freq' column
+    group_data = group_data(~isnan(group_data.Freq), :);
+
+    % Get unique frequencies and sort them
+    freqs = unique(group_data.Freq);
+    [freqs, sortIdx] = sort(freqs);
+
+    % Initialize struct to store individual ear data
+    control_struct = struct();
+    for i = 1:length(freqs)
+        control_struct.(sprintf('Freq_%.2f', freqs(i))) = [];
+    end
+
+    % Group data by frequency
+    for i = 1:length(freqs)
+        freq_data = group_data(group_data.Freq == freqs(i), :);
+
+        % Calculate ribbons per IHC
+        ribbons_per_ihc = nan(height(freq_data), 1);
+        for j = 1:height(freq_data)
+            if ~isnan(freq_data.UpdatedRibbonCount(j)) && isnumeric(freq_data.UpdatedRibbonCount(j))
+                ribbons_per_ihc(j) = freq_data.UpdatedRibbonCount(j) / freq_data.x_IHCs(j);
+            else
+                ribbons_per_ihc(j) = freq_data.x_Ribbons(j) / freq_data.x_IHCs(j);
+            end
+        end
+
+        % Exclude NaNs from the calculations
+        ribbons_per_ihc = ribbons_per_ihc(~isnan(ribbons_per_ihc));
+
+        % Store individual ear data in the struct
+        control_struct.(sprintf('Freq_%.2f', freqs(i))) = ribbons_per_ihc;
+    end
+end
+
